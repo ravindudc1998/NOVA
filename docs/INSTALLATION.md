@@ -48,13 +48,12 @@ npm run db:generate
 npm run build:api
 npm run check:web
 npm run build:web
-npm test
 ```
 
 Run commands inside `nova-platform/`. Host API development requires local database/identity environment configuration; Compose loads secrets from its private mounts.
 
 ## Public internet hosting
 
-The supplied LAN configuration is not an internet deployment preset. Before using a public domain, separate hostname from bind address, configure public HTTPS, update/test identity origins and callbacks, choose protected public ingest, and validate external throughput and recovery. Keep internal database/management/media-control interfaces private. A VPS/domain is not included in this source release.
+The supplied LAN configuration is not an internet deployment preset. Before using a public domain, separate hostname from bind address, configure public HTTPS and identity origins/callbacks, and choose protected public ingest. Plan server resources and bandwidth for your intended audience. Keep internal database/management/media-control interfaces private. A VPS/domain is not included in this source release.
 
-See [architecture](ARCHITECTURE.md), [test limits](TESTING.md) and [third-party notices](THIRD-PARTY-NOTICES.md).
+See [architecture](ARCHITECTURE.md) and [third-party notices](THIRD-PARTY-NOTICES.md).
