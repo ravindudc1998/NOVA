@@ -1,0 +1,29 @@
+logLevel: warn
+api: yes
+apiAddress: :9997
+rtsp: yes
+rtspTransports: [tcp]
+rtmp: yes
+rtmpAddress: :1935
+hls: yes
+hlsAddress: :8888
+hlsVariant: fmp4
+hlsSegmentDuration: 2s
+hlsSegmentCount: 7
+hlsAlwaysRemux: no
+webrtc: yes
+webrtcAddress: :8889
+webrtcICEServers2: []
+webrtcIPsFromInterfaces: no
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+srt: no
+authMethod: http
+# Callback is reachable only on the Compose network. Every action is authenticated.
+authHTTPAddress: http://api:3000/internal/media/authorize
+authHTTPExclude: []
+pathDefaults:
+  overridePublisher: no
+paths:
+  "~^(ingest|live)/":
+    record: no

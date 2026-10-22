@@ -1,0 +1,77 @@
+{
+  admin off
+  default_sni {$NOVA_HOST}
+  auto_https disable_redirects
+}
+https://{$NOVA_HOST} {
+  tls internal
+  encode zstd gzip
+  header Referrer-Policy same-origin
+  header X-Content-Type-Options nosniff
+  handle /local-ca.crt {
+    root * /data/caddy/pki/authorities/local
+    rewrite * /root.crt
+    file_server
+  }
+  handle /auth/* {
+    reverse_proxy keycloak:8080
+  }
+  @media {
+    method GET HEAD
+    path_regexp media ^/api/v1/play/[0-9a-f-]{36}/[^/]+$
+  }
+  handle /api/v1/play/* {
+    route {
+      handle @media {
+        route {
+          request_header -X-Nova-Media-File
+          request_header -X-Nova-Media-Mode
+          forward_auth api:3000 {
+            uri /internal/media/playback-access
+            copy_headers X-Nova-Media-File X-Nova-Media-Mode
+          }
+          @verified header X-Nova-Media-Mode verified
+          handle @verified {
+            header X-Nova-Delivery verified
+            reverse_proxy api:3000
+          }
+          handle {
+            root * /var/lib/nova-hls
+            rewrite * {http.request.header.X-Nova-Media-File}
+            header Cache-Control "private, no-store"
+            header X-Nova-Delivery direct
+            @playlist path *.m3u8
+            header @playlist Content-Type application/vnd.apple.mpegurl
+            @segment path *.m4s
+            header @segment Content-Type video/iso.segment
+            file_server
+          }
+        }
+      }
+      handle {
+        reverse_proxy api:3000
+      }
+    }
+  }
+  handle /api/* {
+    reverse_proxy api:3000
+  }
+  handle /health/* {
+    reverse_proxy api:3000
+  }
+  handle {
+    root * /srv
+    try_files {path} /index.html
+    file_server
+  }
+}
+http://{$NOVA_HOST} {
+  handle /local-ca.crt {
+    root * /data/caddy/pki/authorities/local
+    rewrite * /root.crt
+    file_server
+  }
+  handle {
+    redir https://{$NOVA_HOST}{uri} 308
+  }
+}

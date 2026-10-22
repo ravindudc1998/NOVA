@@ -1,0 +1,50 @@
+{
+  "name": "nova-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "node scripts/seed.mjs",
+    "build:api": "tsc -p apps/api/tsconfig.json",
+    "build:web": "vite build --config apps/web/vite.config.ts",
+    "build": "npm run db:generate && npm run build:api && npm run build:web",
+    "start": "node apps/api/dist/main.js",
+    "dev:api": "tsx watch apps/api/src/main.ts",
+    "dev:web": "vite --config apps/web/vite.config.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "check:web": "tsc --noEmit -p apps/web/tsconfig.json"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.2.0",
+    "@nestjs/core": "12.2.0",
+    "@nestjs/platform-express": "12.2.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "hls.js": "1.7.3",
+    "jose": "6.2.13",
+    "keycloak-js": "26.2.4",
+    "pg": "8.16.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "sharp": "0.35.5",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.3",
+    "@types/node": "24.10.0",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "dotenv": "17.2.3",
+    "prisma": "7.10.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "werift": "0.25.1"
+  },
+  "license": "MIT"
+}

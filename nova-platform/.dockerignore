@@ -1,0 +1,12 @@
+node_modules
+__pycache__
+*.pyc
+.git
+.env
+.secrets
+.load-test
+apps/*/dist
+data
+*.log
+nova-local-ca.crt
+restart-check.json

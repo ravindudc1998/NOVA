@@ -1,0 +1,56 @@
+main{display:flex;flex-direction:column}
+.page-content{flex:1;min-width:0}
+.player-controls{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:12px}
+.player-controls .sound-button{margin:0}
+.quality-picker{display:flex;flex-direction:row;align-items:center;gap:9px;margin:0;color:#b1bccb;font-size:11px}
+.quality-picker select{width:auto;min-width:140px;padding:8px 10px}
+.quality-status{font-size:11px;color:#9399a4}
+aside{overflow-y:auto;scrollbar-width:thin;scrollbar-color:#3b4736 transparent}
+.space-links{display:flex;flex-direction:column}
+.space-links>a{padding:13px;margin-bottom:7px;display:flex;align-items:center;gap:12px;font-size:12px;color:#a8b0bd;border-radius:7px;white-space:nowrap}
+.space-links>a.active{background:#293120;color:var(--lime)}
+.space-links>a:hover{background:#242a30}
+.space-links>a>span{font-size:20px;line-height:1}
+.favourites-section{margin-top:25px;padding-top:23px;border-top:1px solid var(--line)}
+.favourites-section>.side-label{margin-bottom:12px}
+.favourites-nav{display:flex;flex-direction:column;gap:4px}
+.favourites-nav>.favourite-channel{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:7px;min-width:0}
+.favourites-nav>.favourite-channel:hover{background:#242a30}
+.favourite-channel>span:last-child{min-width:0}
+.favourite-channel strong{display:block;font-size:11px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c8d0dc}
+.favourite-channel small{display:block;font-size:10px;margin-top:4px;color:#78869b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.channel-dot{width:6px;height:6px;border-radius:50%;background:#5b6270;flex-shrink:0}
+.channel-dot.live-dot{background:var(--lime);box-shadow:0 0 8px #d6f75b33}
+.favourites-empty{font-size:11px;line-height:1.7;color:#8190a4;padding:7px 13px}
+.channel-grid{grid-template-columns:repeat(6,minmax(0,1fr))}
+.channel-art{height:auto;aspect-ratio:16/9}
+.channel-art>strong{font-size:clamp(40px,4vw,74px);line-height:1}
+.thumbnail-surface{position:absolute;inset:0;display:grid;place-items:center;overflow:hidden}.thumbnail-surface>strong{font-size:clamp(40px,4vw,74px);line-height:1;color:#667a4a;font-weight:600}.live-thumbnail{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#080a0c}.channel-art .stage{z-index:1}
+.channel-card{position:relative;min-width:0}
+.channel-card>a{display:block;min-width:0}
+.channel-card>a>h3,.channel-card>a>span,.channel-card>a>p,.channel-card>a>.small{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.section-heading.discovery-heading{margin-top:0}
+.favourite-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#252d23;border:1px solid #49563b;color:#d4dec7;white-space:nowrap}
+.favourite-button>span:first-child{font-size:20px;line-height:1}
+.favourite-button:hover{background:#35412d}
+.favourite-button.is-favourite{color:var(--lime);border-color:#687d42}
+.favourite-button.favourite-floating{position:absolute;top:10px;right:10px;width:34px;height:34px;padding:0;background:#141a17ed;border-radius:8px}
+.channel-heading-actions{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.error-page>.actions{justify-content:center}
+@media(max-width:1279px){.channel-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1100px){.channel-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.channel-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:720px){
+ aside{display:block;height:auto;max-height:160px;overflow:hidden}
+ .space-links{flex-direction:row;gap:4px;overflow:auto;scrollbar-width:none}
+ .space-links>a{padding:8px 10px;margin:0;font-size:11px;gap:7px}
+ .space-links>a>span{font-size:17px}
+ .favourites-section{display:flex;align-items:center;margin-top:7px;padding-top:5px;border-top:1px solid #29313b;min-height:41px}
+ .favourites-section>.side-label{display:block;margin:0 8px 0 2px;font-size:8px;letter-spacing:1px;flex-shrink:0}
+ .favourites-nav{flex-direction:row;overflow:auto;min-width:0;flex:1;scrollbar-width:none}
+ .favourites-nav>.favourite-channel{padding:5px 9px;min-width:140px;max-width:180px;flex-shrink:0;gap:7px}
+ .favourite-channel strong{font-size:10px}.favourite-channel small{font-size:9px;margin-top:2px}
+ .favourites-empty{font-size:10px;white-space:nowrap;padding:7px 0}
+ main.main-with-favourites{padding-top:188px}
+ .channel-heading-actions{gap:8px;flex-wrap:wrap}
+}

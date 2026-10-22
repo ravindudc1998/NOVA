@@ -1,0 +1,298 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "client"
+}
+datasource db {
+  provider = "postgresql"
+}
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  identitySubject String @unique
+  username String @unique
+  displayName String
+  status String @default("active")
+  bio String @default("")
+  profileVersion Int @default(1)
+  authNotBefore Int @default(0)
+  authAllowedSessionId String?
+  createdAt DateTime @default(now())
+  memberships Membership[]
+  channel Channel?
+  messages ChatMessage[]
+  favourites FavouriteChannel[]
+  recentChannels RecentChannel[]
+  chatRestrictions ChatRestriction[]
+  moderatedChannels ChannelModerator[]
+  chatReports ChatReport[]
+  follows Follow[]
+  notifications Notification[]
+  revokedSessions RevokedSession[]
+}
+model Group {
+  id String @id @default(uuid()) @db.Uuid
+  key String @unique
+  name String @unique
+  description String @default("")
+  protected Boolean @default(false)
+  memberships Membership[]
+  permissions GroupPermission[]
+}
+model Permission {
+  code String @id
+  description String
+  groups GroupPermission[]
+}
+model GroupPermission {
+  groupId String @db.Uuid
+  permissionCode String
+  group Group @relation(fields:[groupId],references:[id],onDelete:Cascade)
+  permission Permission @relation(fields:[permissionCode],references:[code])
+  @@id([groupId,permissionCode])
+}
+model Membership {
+  userId String @db.Uuid
+  groupId String @db.Uuid
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  group Group @relation(fields:[groupId],references:[id],onDelete:Cascade)
+  @@id([userId,groupId])
+}
+model Channel {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String @unique @db.Uuid
+  slug String @unique
+  bio String @default("")
+  title String
+  state String @default("offline")
+  accessState String @default("ready")
+  settings Json @default("{}")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  categoryId String? @db.Uuid
+  category Category? @relation(fields:[categoryId],references:[id],onDelete:SetNull)
+  owner User @relation(fields:[ownerId],references:[id])
+  credential StreamCredential?
+  chatRoom ChatRoom?
+  sessions StreamSession[]
+  favouritedBy FavouriteChannel[]
+  recentlyViewedBy RecentChannel[]
+  brandingAssets ChannelAsset[]
+  chatRestrictions ChatRestriction[]
+  moderators ChannelModerator[]
+  chatRules ChatRules?
+  chatReports ChatReport[]
+  followers Follow[]
+  followActivity FollowActivity[]
+  notifications Notification[]
+  liveEvents LiveNotificationEvent[]
+  @@index([categoryId,state])
+}
+model FavouriteChannel {
+  userId String @db.Uuid
+  channelId String @db.Uuid
+  createdAt DateTime @default(now())
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  @@id([userId,channelId])
+  @@index([userId,createdAt])
+}
+model RecentChannel {
+  userId String @db.Uuid
+  channelId String @db.Uuid
+  lastViewedAt DateTime @default(now())
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  @@id([userId,channelId])
+  @@index([userId,lastViewedAt])
+}
+model StreamCredential {
+  channelId String @id @db.Uuid
+  generation Int @default(1)
+  lookupHash String @unique
+  encryptedSecret String
+  createdAt DateTime @default(now())
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+}
+model StreamSession {
+  id String @id @default(uuid()) @db.Uuid
+  channelId String @db.Uuid
+  publisherId String
+  protocol String
+  status String @default("starting")
+  createdAt DateTime @default(now())
+  startedAt DateTime?
+  lastSeenAt DateTime?
+  lastOutputAt DateTime?
+  endedAt DateTime?
+  endReason String?
+  peakViewers Int @default(0)
+  title String?
+  analyticsStartedAt DateTime?
+  lastAnalyticsAt DateTime?
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  samples AudienceSample[]
+  liveEvent LiveNotificationEvent?
+  notifications Notification[]
+  @@index([channelId,createdAt])
+}
+model Follow {
+  userId String @db.Uuid
+  channelId String @db.Uuid
+  notifyLive Boolean @default(true)
+  createdAt DateTime @default(now())
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  @@id([userId,channelId])
+  @@index([channelId,userId])
+}
+model FollowActivity {
+  id String @id @default(uuid()) @db.Uuid
+  channelId String @db.Uuid
+  kind String
+  createdAt DateTime @default(now())
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  @@index([channelId,createdAt])
+}
+model LiveNotificationEvent {
+  sessionId String @id @db.Uuid
+  channelId String @db.Uuid
+  cursor String? @db.Uuid
+  createdAt DateTime @default(now())
+  processedAt DateTime?
+  session StreamSession @relation(fields:[sessionId],references:[id],onDelete:Cascade)
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  @@index([processedAt,createdAt])
+}
+model Notification {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  channelId String @db.Uuid
+  sessionId String @db.Uuid
+  title String
+  creatorName String
+  createdAt DateTime @default(now())
+  readAt DateTime?
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  session StreamSession @relation(fields:[sessionId],references:[id],onDelete:Cascade)
+  @@unique([userId,sessionId])
+  @@index([userId,createdAt])
+}
+model AudienceSample {
+  sessionId String @db.Uuid
+  bucketAt DateTime
+  viewerSeconds Float @default(0)
+  observedSeconds Float @default(0)
+  session StreamSession @relation(fields:[sessionId],references:[id],onDelete:Cascade)
+  @@id([sessionId,bucketAt])
+  @@index([bucketAt])
+}
+model RevokedSession {
+  userId String @db.Uuid
+  sessionId String
+  expiresAt DateTime
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@id([userId,sessionId])
+  @@index([expiresAt])
+}
+model ChatMessage {
+  id Int @id @default(autoincrement())
+  roomId String @db.Uuid
+  authorId String? @db.Uuid
+  clientMessageId String @db.Uuid
+  displayName String
+  text String
+  deleted Boolean @default(false)
+  createdAt DateTime @default(now())
+  room ChatRoom @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  author User? @relation(fields:[authorId],references:[id],onDelete:SetNull)
+  reports ChatReport[]
+  @@unique([authorId,clientMessageId])
+  @@index([roomId,id])
+  @@index([roomId,authorId,createdAt])
+}
+model Category {
+  id String @id @default(uuid()) @db.Uuid
+  slug String @unique
+  name String @unique
+  description String @default("")
+  enabled Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  channels Channel[]
+}
+model ChannelAsset {
+  channelId String @db.Uuid
+  kind String
+  revision String
+  bytes Bytes
+  updatedAt DateTime @default(now()) @updatedAt
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  @@id([channelId,kind])
+}
+model ChatRestriction {
+  channelId String @db.Uuid
+  userId String @db.Uuid
+  kind String
+  reason String @default("")
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  actorId String
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@id([channelId,userId])
+  @@index([channelId,expiresAt])
+}
+model ChannelModerator {
+  channelId String @db.Uuid
+  userId String @db.Uuid
+  createdAt DateTime @default(now())
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@id([channelId,userId])
+}
+model ChatRules {
+  channelId String @id @db.Uuid
+  blockedWords String[] @default([])
+  version Int @default(1)
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+}
+model ChatReport {
+  id String @id @default(uuid()) @db.Uuid
+  channelId String @db.Uuid
+  reporterId String @db.Uuid
+  messageId Int
+  reason String
+  details String @default("")
+  snapshot Json
+  status String @default("open")
+  resolution String @default("")
+  reviewerId String?
+  createdAt DateTime @default(now())
+  reviewedAt DateTime?
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  reporter User @relation(fields:[reporterId],references:[id],onDelete:Cascade)
+  message ChatMessage @relation(fields:[messageId],references:[id],onDelete:Cascade)
+  @@unique([reporterId,messageId])
+  @@index([channelId,status,createdAt])
+  @@index([reporterId,createdAt])
+}
+model ChatRoom {
+  id String @id @default(uuid()) @db.Uuid
+  channelId String @unique @db.Uuid
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  messages ChatMessage[]
+}
+model Setting {
+  key String @id
+  value Json
+  version Int @default(1)
+}
+model AuditEvent {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String?
+  action String
+  targetId String?
+  details Json @default("{}")
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}

@@ -1,0 +1,181 @@
+name: nova
+x-app: &app
+  image: nova-application:0.1.0
+  build:
+    context: .
+    target: application
+  init: true
+  environment: &app-env
+    CHECKPOINT_DISABLE: "1"
+    PRISMA_HIDE_UPDATE_MESSAGE: "1"
+    DO_NOT_TRACK: "1"
+    IDENTITY_ISSUER: https://${NOVA_HOST}/auth/realms/nova
+    IDENTITY_JWKS_URL: http://keycloak:8080/auth/realms/nova/protocol/openid-connect/certs
+    PUBLIC_IDENTITY_URL: https://${NOVA_HOST}/auth
+    NOVA_HOST: ${NOVA_HOST}
+  secrets: &app-secrets
+    - app_db_password
+    - credential_key
+    - media_secret
+services:
+  postgres:
+    image: postgres:17.6@sha256:00bc86618629af00d2937fdc5a5d63db3ff8450acf52f0636ec813c7f4902929
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password,app_db_password,identity_db_password]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/db-init.sh:/docker-entrypoint-initdb.d/10-nova.sh:ro
+    healthcheck:
+      test: [CMD-SHELL,pg_isready -U postgres]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3@sha256:29be7252db0a106f1cd2ac17b9a56ff2668073da645638a38b9fc67deeb2d6c4
+    restart: unless-stopped
+    entrypoint: [/bin/bash,/opt/nova/keycloak-entry.sh]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/nova_identity
+      KC_DB_USERNAME: nova_identity
+      KC_BOOTSTRAP_ADMIN_USERNAME: nova-bootstrap
+      KC_HOSTNAME: https://${NOVA_HOST}/auth
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_MANAGEMENT_RELATIVE_PATH: /
+      NOVA_ORIGIN: https://${NOVA_HOST}
+    secrets: [identity_db_password,identity_admin_password]
+    volumes:
+      - ./infra/keycloak-entry.sh:/opt/nova/keycloak-entry.sh:ro
+      - ./infra/realm.json:/opt/keycloak/data/import/nova-realm.json:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: [CMD-SHELL,"bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000; printf \"GET /health/ready HTTP/1.0\r\n\r\n\" >&3; grep -q UP <&3'"]
+      interval: 10s
+      timeout: 5s
+      start_period: 90s
+      retries: 12
+  migrate:
+    <<: *app
+    command: [node,--import,./scripts/load-secrets.mjs,node_modules/prisma/build/index.js,migrate,deploy]
+    depends_on:
+      postgres: {condition: service_healthy}
+  seed:
+    <<: *app
+    command: [node,--import,./scripts/load-secrets.mjs,scripts/seed.mjs]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  initialize:
+    <<: *app
+    user: root
+    command: [node,--import,./scripts/load-secrets.mjs,scripts/initialize-identity.mjs]
+    secrets:
+      - app_db_password
+      - identity_admin_password
+      - first_admin_password
+      - identity_service_secret
+    depends_on:
+      keycloak: {condition: service_healthy}
+      seed: {condition: service_completed_successfully}
+  api:
+    <<: *app
+    secrets: [app_db_password,credential_key,media_secret,identity_service_secret]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    volumes:
+      - hls_data:/var/lib/nova-hls:ro
+      - health_data:/var/lib/nova-health:ro
+    depends_on:
+      initialize: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD,node,-e,"fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  mediamtx:
+    image: bluenviron/mediamtx:1.15.4@sha256:4ad800aa1df715211f44a7a5fabc67a308f01c128c5ce4ebf72c34d172812639
+    restart: unless-stopped
+    environment:
+      MTX_WEBRTCADDITIONALHOSTS: ${NOVA_HOST}
+    ports:
+      - "${NOVA_HOST}:1935:1935"
+      - "${NOVA_HOST}:8189:8189/udp"
+      - "${NOVA_HOST}:8189:8189/tcp"
+    volumes:
+      - ./infra/mediamtx.yml:/mediamtx.yml:ro
+      - recordings:/recordings
+    depends_on:
+      api: {condition: service_healthy}
+  media-worker:
+    image: nova-media-worker:0.4.0
+    build:
+      context: .
+      target: media-worker
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      NOVA_VIDEO_MAX_HEIGHT: "2160"
+      NOVA_VIDEO_PRESET: veryfast
+    volumes:
+      - hls_data:/var/lib/nova-hls
+    secrets: [media_secret]
+    depends_on:
+      mediamtx: {condition: service_started}
+  media-health:
+    image: nova-media-health:0.1.0
+    build:
+      context: .
+      target: media-health
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    volumes:
+      - hls_data:/var/lib/nova-hls:ro
+      - health_data:/var/lib/nova-health
+    secrets: [media_secret]
+    depends_on:
+      api: {condition: service_healthy}
+      mediamtx: {condition: service_started}
+  gateway:
+    image: nova-gateway:0.1.0
+    build:
+      context: .
+      target: gateway
+    restart: unless-stopped
+    environment:
+      NOVA_HOST: ${NOVA_HOST}
+    ports:
+      - "${NOVA_HOST}:80:80"
+      - "${NOVA_HOST}:443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      - hls_data:/var/lib/nova-hls:ro
+    depends_on:
+      api: {condition: service_healthy}
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+  recordings:
+  hls_data:
+  health_data:
+secrets:
+  postgres_password: {file: ./.secrets/postgres_password}
+  app_db_password: {file: ./.secrets/app_db_password}
+  identity_db_password: {file: ./.secrets/identity_db_password}
+  identity_admin_password: {file: ./.secrets/identity_admin_password}
+  first_admin_password: {file: ./.secrets/first_admin_password}
+  credential_key: {file: ./.secrets/credential_key}
+  media_secret: {file: ./.secrets/media_secret}
+  identity_service_secret: {file: ./.secrets/identity_service_secret}
+

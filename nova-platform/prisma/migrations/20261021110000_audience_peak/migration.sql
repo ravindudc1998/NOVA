@@ -1,0 +1,1 @@
+ALTER TABLE "StreamSession" ADD COLUMN "peakViewers" INTEGER NOT NULL DEFAULT 0;
