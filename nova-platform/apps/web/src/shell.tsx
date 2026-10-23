@@ -9,7 +9,7 @@ import {AnalyticsDashboard} from './analytics';
 import {PageBoundary} from './error-boundary';
 
 const can=(user:any,permission:string)=>Boolean(user&&(user.permissions.includes('platform.admin')||user.permissions.includes(permission)));
-const adminAccess=(user:any)=>['operations.read','users.manage','groups.manage','settings.manage','audit.read','streams.stop_any','categories.manage','reports.review','channels.manage_any','analytics.read_any'].some(permission=>can(user,permission));
+const adminAccess=(user:any)=>['operations.read','users.manage','groups.manage','settings.manage','audit.read','streams.stop_any','categories.manage','reports.review','channels.manage_any','analytics.read_any','restreams.manage_any'].some(permission=>can(user,permission));
 
 export function App({identity,api,config,Admin,Studio}:any){
  const [user,setUser]=useState<any>(null),[route,setRoute]=useState(()=>readRoute(location.pathname,location.hash)),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');

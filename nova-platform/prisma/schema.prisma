@@ -84,6 +84,7 @@ model Channel {
   followActivity FollowActivity[]
   notifications Notification[]
   liveEvents LiveNotificationEvent[]
+  restreamDestinations RestreamDestination[]
   @@index([categoryId,state])
 }
 model FavouriteChannel {
@@ -132,7 +133,33 @@ model StreamSession {
   samples AudienceSample[]
   liveEvent LiveNotificationEvent?
   notifications Notification[]
+  restreamOutputs RestreamDestination[]
   @@index([channelId,createdAt])
+}
+model RestreamDestination {
+  id String @id @default(uuid()) @db.Uuid
+  channelId String @db.Uuid
+  provider String
+  name String
+  serverUrl String
+  encryptedKey String
+  enabled Boolean @default(false)
+  maxHeight Int @default(720)
+  version Int @default(1)
+  status String @default("waiting")
+  errorCode String?
+  sessionId String? @db.Uuid
+  statusVersion Int @default(0)
+  lastHeartbeatAt DateTime?
+  startedAt DateTime?
+  bitrateKbps Int @default(0)
+  bytesSent BigInt @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
+  session StreamSession? @relation(fields:[sessionId],references:[id],onDelete:SetNull)
+  @@index([channelId,createdAt])
+  @@index([enabled,createdAt])
 }
 model Follow {
   userId String @db.Uuid

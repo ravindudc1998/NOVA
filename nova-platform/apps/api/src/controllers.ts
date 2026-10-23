@@ -4,6 +4,8 @@ import {PlatformService} from './platform.service.js';
 import {IdentityGuard,OptionalIdentityGuard} from './auth.js';
 import {Database} from './database.js';
 import {MediaController} from './media.controllers.js';
+import {RestreamController} from './restream.controllers.js';
+import {RestreamService} from './restream.service.js';
 import {MediaService} from './media.service.js';
 import {ChatService} from './chat.service.js';
 import {LibraryService} from './library.service.js';
@@ -20,7 +22,7 @@ import {IdentityAdminService} from './identity-admin.service.js';
 const uuid=z.string().uuid();
 const clientErrorInput=z.object({reference:z.string().regex(/^[a-zA-Z0-9-]{1,64}$/),kind:z.enum(['react','runtime','promise','startup','navigation']),route:z.enum(['home','discover','studio','admin','channel','other']),message:z.string().max(1000),stack:z.string().max(3000),componentStack:z.string().max(2000)}).strict();
 const groupInput=z.object({name:z.string().trim().min(2).max(60),description:z.string().trim().max(300).default(''),permissions:z.array(z.string().max(80)).max(100)}).strict();
-const settingInput=z.object({expectedVersion:z.number().int().min(1),registrationEnabled:z.boolean().optional(),creatorSignupEnabled:z.boolean().optional(),creatorApprovalRequired:z.boolean().optional(),liveNotificationsEnabled:z.boolean().optional(),publishingEnabled:z.boolean().optional(),browserPublishingEnabled:z.boolean().optional(),guestViewingEnabled:z.boolean().optional(),chatEnabled:z.boolean().optional(),recordingAllowed:z.boolean().optional(),defaultLanguage:z.enum(['en','si','ta']).optional(),defaultCategory:z.string().trim().min(1).max(50).optional(),defaultSlowModeSeconds:z.number().int().min(0).max(120).optional(),platformName:z.string().trim().min(1).max(40).optional(),announcement:z.string().max(500).optional(),maintenanceEnabled:z.boolean().optional()}).strict();
+const settingInput=z.object({expectedVersion:z.number().int().min(1),registrationEnabled:z.boolean().optional(),creatorSignupEnabled:z.boolean().optional(),creatorApprovalRequired:z.boolean().optional(),liveNotificationsEnabled:z.boolean().optional(),publishingEnabled:z.boolean().optional(),browserPublishingEnabled:z.boolean().optional(),restreamingEnabled:z.boolean().optional(),restreamMaxDestinations:z.number().int().min(1).max(8).optional(),restreamMaxActive:z.number().int().min(1).max(64).optional(),guestViewingEnabled:z.boolean().optional(),chatEnabled:z.boolean().optional(),recordingAllowed:z.boolean().optional(),defaultLanguage:z.enum(['en','si','ta']).optional(),defaultCategory:z.string().trim().min(1).max(50).optional(),defaultSlowModeSeconds:z.number().int().min(0).max(120).optional(),platformName:z.string().trim().min(1).max(40).optional(),announcement:z.string().max(500).optional(),maintenanceEnabled:z.boolean().optional()}).strict();
 @Controller()
 export class PublicController {
   constructor(private readonly service:PlatformService,private readonly library:LibraryService){}
@@ -71,5 +73,5 @@ export class ErrorFilter implements ExceptionFilter {
     res.status(status).json({statusCode:status,message});
   }
 }
-@Module({controllers:[PublicController,AccountController,AdminController,MediaController,LibraryController,CommunityController,SocialController],providers:[Database,PlatformService,IdentityGuard,OptionalIdentityGuard,MediaService,ChatService,LibraryService,AudienceService,CategoryService,BrandingService,SocialService,AccountService,AnalyticsService,IdentityAdminService]})
+@Module({controllers:[PublicController,AccountController,AdminController,MediaController,RestreamController,LibraryController,CommunityController,SocialController],providers:[Database,PlatformService,IdentityGuard,OptionalIdentityGuard,MediaService,RestreamService,ChatService,LibraryService,AudienceService,CategoryService,BrandingService,SocialService,AccountService,AnalyticsService,IdentityAdminService]})
 export class ApplicationModule {}

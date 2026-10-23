@@ -5,16 +5,17 @@ import {StreamHealth} from './stream-health';
 import {ModalDialog as StudioDialog} from './dialog';
 import {ChannelTools} from './channel-tools';
 import {AnalyticsDashboard} from './analytics';
+import {RestreamDialog} from './restream';
 import {CategorySelect} from './branding';
 
-type Popup='obs'|'settings'|'tools'|'analytics'|null;
+type Popup='obs'|'settings'|'tools'|'analytics'|'restream'|null;
 const languages:Record<string,string>={en:'English',si:'Sinhala',ta:'Tamil'};
 
 export function StudioWorkspace({channel,effectiveSettings,branding,broadcastingAvailable,user,api,identity,run,openPopup,onStop}:any){
  const settings=effectiveSettings,live=channel.state==='live';
  return <div className="studio-manager">
   <div className="studio-toolbar"><div className="studio-title"><div className="eyebrow">CREATOR STUDIO</div><h1>Stream manager <span>@{channel.slug}</span></h1></div>
-   <div className="studio-actions"><span className={`stage ${live?'is-live':''}`}>{channel.state.toUpperCase()}</span><button className="secondary" onClick={()=>openPopup('obs')}>Broadcast with OBS</button><button className="secondary" onClick={()=>openPopup('tools')}>Channel tools</button>{(user.permissions.includes('analytics.read_own')||user.permissions.includes('platform.admin'))&&<button className="secondary" onClick={()=>openPopup('analytics')}>Analytics</button>}<button className="primary" onClick={()=>openPopup('settings')}>Edit stream info</button><a className="studio-channel-link" href={`/channel/${channel.id}`} target="_blank" rel="noopener noreferrer" aria-label="Open your channel in a new tab" title="Open your channel in a new tab">↗</a>{channel.state!=='offline'&&<button className="danger" onClick={onStop}>Stop broadcast</button>}</div>
+   <div className="studio-actions"><span className={`stage ${live?'is-live':''}`}>{channel.state.toUpperCase()}</span><button className="secondary" onClick={()=>openPopup('obs')}>Broadcast with OBS</button><button className="secondary" onClick={()=>openPopup('tools')}>Channel tools</button>{(user.permissions.includes('restreams.manage_own')||user.permissions.includes('platform.admin'))&&<button className="secondary" onClick={()=>openPopup('restream')}>Multistream</button>}{(user.permissions.includes('analytics.read_own')||user.permissions.includes('platform.admin'))&&<button className="secondary" onClick={()=>openPopup('analytics')}>Analytics</button>}<button className="primary" onClick={()=>openPopup('settings')}>Edit stream info</button><a className="studio-channel-link" href={`/channel/${channel.id}`} target="_blank" rel="noopener noreferrer" aria-label="Open your channel in a new tab" title="Open your channel in a new tab">↗</a>{channel.state!=='offline'&&<button className="danger" onClick={onStop}>Stop broadcast</button>}</div>
   </div>
   {!broadcastingAvailable&&<div className="info studio-publishing-notice">Publishing is unavailable. Your administrator may need to enable broadcasting or approve your channel.</div>}
   <div className="studio-workspace">
@@ -94,6 +95,7 @@ export function CreatorStudio({user,api,identity,run,flash}:any){
  };
  return <>
   <StudioWorkspace channel={c} effectiveSettings={data.effectiveSettings} branding={data.branding} broadcastingAvailable={data.broadcasting.available} user={user} api={api} identity={identity} run={run} openPopup={openPopup} onStop={stop}/>
+  {popup==='restream'&&<RestreamDialog api={api} onClose={()=>openPopup(null)}/>}
   {popup==='settings'&&<StudioDialog title="Make it yours" description="Update your stream details and channel chat." error={popupError} notice={popupNotice} onClose={()=>openPopup(null)}>
    <form onSubmit={save}>
     <label>Stream title<input name="title" defaultValue={edit.channel.title} maxLength={100} required autoFocus/></label>

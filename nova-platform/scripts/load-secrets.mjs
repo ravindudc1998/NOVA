@@ -5,3 +5,5 @@ if(existsSync('/run/secrets/credential_key'))process.env.CREDENTIAL_ENCRYPTION_K
 if(existsSync('/run/secrets/media_secret'))process.env.MEDIA_SERVICE_SECRET=secret('media_secret');
 
 if(existsSync('/run/secrets/identity_service_secret'))process.env.IDENTITY_SERVICE_SECRET=secret('identity_service_secret');
+
+if(existsSync('/run/secrets/restream_service_secret'))process.env.RESTREAM_SERVICE_SECRET=secret('restream_service_secret');

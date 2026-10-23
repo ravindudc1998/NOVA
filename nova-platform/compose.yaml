@@ -84,7 +84,7 @@ services:
       seed: {condition: service_completed_successfully}
   api:
     <<: *app
-    secrets: [app_db_password,credential_key,media_secret,identity_service_secret]
+    secrets: [app_db_password,credential_key,media_secret,identity_service_secret,restream_service_secret]
     restart: unless-stopped
     read_only: true
     tmpfs: [/tmp]
@@ -162,6 +162,23 @@ services:
       - hls_data:/var/lib/nova-hls:ro
     depends_on:
       api: {condition: service_healthy}
+  restream-worker:
+    image: nova-restream-worker:0.1.0
+    build:
+      context: .
+      target: restream-worker
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    pids_limit: 256
+    cpus: 4.0
+    mem_limit: 1g
+    volumes:
+      - hls_data:/var/lib/nova-hls:ro
+    secrets: [restream_service_secret]
+    depends_on:
+      api: {condition: service_healthy}
 volumes:
   postgres_data:
   caddy_data:
@@ -178,4 +195,5 @@ secrets:
   credential_key: {file: ./.secrets/credential_key}
   media_secret: {file: ./.secrets/media_secret}
   identity_service_secret: {file: ./.secrets/identity_service_secret}
+  restream_service_secret: {file: ./.secrets/restream_service_secret}
 

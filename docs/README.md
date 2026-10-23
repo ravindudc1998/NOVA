@@ -9,6 +9,7 @@ The supplied Docker Compose configuration runs on a trusted local network. Publi
 - OBS/RTMP broadcasting with local H.264/AAC processing and source-aware quality choices up to 4K/30 fps.
 - Guest or signed-in viewing, Auto/manual quality controls, fullscreen, picture-in-picture and integrated chat.
 - Creator Studio with stream setup, live monitor/chat, stream information and Stream Health.
+- Per-creator multistream destinations for Twitch, YouTube, Facebook, LinkedIn or custom public RTMP/RTMPS: manual URL/key setup, encrypted keys, independent relays and administrator limits.
 - Home with recent channels, live-only discovery, categories, channel branding and live thumbnails.
 - Accounts, automatic creator/channel setup, groups, permissions and administrator controls.
 - Favourites, follows and persistent in-app live notifications.
@@ -16,6 +17,8 @@ The supplied Docker Compose configuration runs on a trusted local network. Publi
 - Creator/platform analytics, account administration, session revocation and audit history.
 
 Browser publishing infrastructure is retained for a separately planned browser studio. Its controls are not in the current Studio. Recordings/VOD, scheduled streams, a full operations dashboard and automated backup/recovery are future work.
+
+External multistreaming needs internet upload and eligible provider accounts. Creators manage each platform's preview, final Go Live action, titles and chat there; LinkedIn requires a scheduled Live Event. NOVA's own video, identity and chat continue to run on your server.
 
 ## Get started
 

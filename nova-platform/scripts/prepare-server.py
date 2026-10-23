@@ -8,7 +8,7 @@ root = pathlib.Path(__file__).resolve().parent.parent
 private = root / '.secrets'
 private.mkdir(mode=0o700, exist_ok=True)
 os.chmod(private, 0o700)
-for name in ['postgres_password', 'app_db_password', 'identity_db_password', 'identity_admin_password', 'first_admin_password', 'credential_key', 'media_secret', 'identity_service_secret']:
+for name in ['postgres_password', 'app_db_password', 'identity_db_password', 'identity_admin_password', 'first_admin_password', 'credential_key', 'media_secret', 'identity_service_secret', 'restream_service_secret']:
     target = private / name
     if not target.exists():
         value = secrets.token_hex(32) if name == 'credential_key' else secrets.token_urlsafe(30)

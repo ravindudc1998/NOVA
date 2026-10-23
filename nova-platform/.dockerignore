@@ -10,3 +10,6 @@ data
 *.log
 nova-local-ca.crt
 restart-check.json
+artifacts
+docs
+tests

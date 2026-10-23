@@ -4,6 +4,7 @@ export const PERMISSIONS: Record<string,string> = {
   'reports.create':'Report content', 'profile.edit_own':'Edit own profile', 'channel.manage_own':'Edit own channel',
   'streams.publish_own':'Broadcast to own channel', 'streams.stop_own':'Stop own broadcast',
   'stream_keys.manage_own':'Manage own stream key', 'recordings.manage_own':'Manage own recordings',
+  'restreams.manage_own':'Manage own external stream destinations', 'restreams.manage_any':'Manage all external stream destinations',
   'channel_moderators.manage_own':'Manage own channel moderators', 'reports.review':'Review reports',
   'chat.moderate_any':'Moderate all chat rooms', 'streams.stop_any':'Stop any stream', 'channels.moderate_any':'Moderate channels',
   'users.manage':'Manage users', 'groups.manage':'Manage groups', 'settings.manage':'Manage platform settings',
@@ -14,7 +15,7 @@ export const VIEWER_PERMISSIONS = ['streams.view','chat.send','follows.manage_ow
 export const GROUPS = [
   {key:'administrators',name:'Administrators',protected:true,permissions:['platform.admin']},
   {key:'moderators',name:'Moderators',protected:false,permissions:[...VIEWER_PERMISSIONS,'reports.review','chat.moderate_any','streams.stop_any','channels.moderate_any']},
-  {key:'creators',name:'Creators',protected:false,permissions:['channel.manage_own','streams.publish_own','streams.stop_own','stream_keys.manage_own','recordings.manage_own','channel_moderators.manage_own','analytics.read_own']},
+  {key:'creators',name:'Creators',protected:false,permissions:['channel.manage_own','streams.publish_own','streams.stop_own','stream_keys.manage_own','recordings.manage_own','channel_moderators.manage_own','analytics.read_own','restreams.manage_own']},
   {key:'viewers',name:'Viewers',protected:false,permissions:VIEWER_PERMISSIONS}
 ];
 export const DEFAULT_SETTINGS = {
@@ -22,6 +23,7 @@ export const DEFAULT_SETTINGS = {
   registrationEnabled:true, creatorSignupEnabled:true, creatorApprovalRequired:false,
   publishingEnabled:false, browserPublishingEnabled:false, guestViewingEnabled:false,
   liveNotificationsEnabled:true, chatEnabled:true, recordingAllowed:false, defaultLanguage:'en', defaultCategory:'General',
+  restreamingEnabled:true, restreamMaxDestinations:4, restreamMaxActive:16,
   defaultSlowModeSeconds:0, platformName:'NOVA', announcement:'', maintenanceEnabled:false
 };
 export const RESERVED_SLUGS = new Set(['home','discover','account','analytics','follows','notifications','admin','api','auth','studio','settings','channels','login','register','health']);

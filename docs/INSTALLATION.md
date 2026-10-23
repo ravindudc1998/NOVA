@@ -8,7 +8,7 @@ Clone or download the repository, open its `nova-platform/` directory and run:
 
 ```sh
 python3 scripts/prepare-server.py YOUR_SERVER_LAN_IP
-docker compose build api gateway media-worker media-health
+docker compose build api gateway media-worker media-health restream-worker
 docker compose up -d --no-build
 docker compose ps --all
 ```
@@ -27,6 +27,12 @@ Transfer this public CA certificate through your authenticated server connection
 The initial application administrator is `nova_admin`. Retrieve its generated password privately from `.secrets/first_admin_password` on your own server. First login requires a new password. The Linux/SSH login is a separate account; no fixed server password is included.
 
 Use Administration to configure guest viewing, creator policy, chat and categories. Fresh installations start with guest video access disabled. A creator receives a channel and publishing settings automatically. In Studio, open the OBS setup dialog, configure OBS with the displayed server/key, add video/audio sources and start broadcasting. Start with 720p/30 fps, H.264/AAC and a two-second keyframe interval; advertised viewer qualities depend on the source.
+
+For external destinations, open **Studio → Multistream**, select a platform and paste its server URL and stream key separately. Select up to 720p or 1080p and enable automatic relay. Check the provider's preview and complete its final Go Live action. The source needs audio; smaller sources are not upscaled. LinkedIn requires an eligible account and a scheduled Live Event. Each destination adds server internet upload traffic and may require encoding CPU.
+
+Administrators manage destinations in **Administration → Multistream**, and set the global switch, per-creator destination limit (default 4) and concurrent relay limit (default 16) in **Settings**. Extra relays queue for capacity. Only public IPv4 RTMP/RTMPS receivers on ports 1935/443 are supported; prefer RTMPS when offered. Stream keys are encrypted and cannot be revealed after saving.
+
+When upgrading an existing installation, make protected database/source backups, rerun `prepare-server.py` to create any missing role secret, build the updated images, run `docker compose run --rm -T --no-deps --pull never migrate`, and then start the updated services. Do not reseed or replace existing secret files as an upgrade procedure.
 
 ## Persistent operation
 
