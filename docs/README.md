@@ -9,11 +9,13 @@ The supplied Docker Compose configuration runs on a trusted local network. Publi
 - OBS/RTMP broadcasting with local H.264/AAC processing and source-aware quality choices up to 4K/30 fps.
 - Guest or signed-in viewing, Auto/manual quality controls, fullscreen, picture-in-picture and integrated chat.
 - Creator Studio with stream setup, live monitor/chat, stream information and Stream Health.
+- Emergency stop with the existing stream key, reconnect blocking and explicit Resume publishing.
 - Per-creator multistream destinations for Twitch, YouTube, Facebook, LinkedIn or custom public RTMP/RTMPS: manual URL/key setup, encrypted keys, independent relays and administrator limits.
 - Home with recent channels, live-only discovery, categories, channel branding and live thumbnails.
 - Accounts, automatic creator/channel setup, groups, permissions and administrator controls.
 - Favourites, follows and persistent in-app live notifications.
 - Chat moderation, channel bans/timeouts, blocked phrases and chat reports.
+- Chat clears when a stream ends; saved history transfers safely to a separate local PostgreSQL archive database.
 - Creator/platform analytics, account administration, session revocation and audit history.
 
 Browser publishing infrastructure is retained for a separately planned browser studio. Its controls are not in the current Studio. Recordings/VOD, scheduled streams, a full operations dashboard and automated backup/recovery are future work.

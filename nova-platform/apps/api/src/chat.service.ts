@@ -20,32 +20,34 @@ export class ChatService {
   const overrides=channel.settings as any,restriction=activeRestriction(await tx.chatRestriction.findUnique({where:{channelId_userId:{channelId,userId:user.id}}}));
   const canModerate=allowed(user,'chat.moderate_any')||channel.ownerId===user.id&&allowed(user,'channel.manage_own')||channel.moderators.length>0;
   const enabled=settings.chatEnabled&&overrides.chatEnabled!==false;
-  return {user,channel,roomId:channel.chatRoom.id,enabled,slowModeSeconds:Math.max(0,overrides.slowModeSeconds??settings.defaultSlowModeSeconds),canModerate,canManageModerators:allowed(user,'chat.moderate_any')||channel.ownerId===user.id&&allowed(user,'channel_moderators.manage_own'),restriction,canSend:enabled&&allowed(user,'chat.send')&&!restriction,canReport:allowed(user,'reports.create')};
+  return {user,channel,roomId:channel.chatRoom.id,epoch:channel.chatRoom.epoch,enabled,slowModeSeconds:Math.max(0,overrides.slowModeSeconds??settings.defaultSlowModeSeconds),canModerate,canManageModerators:allowed(user,'chat.moderate_any')||channel.ownerId===user.id&&allowed(user,'channel_moderators.manage_own'),restriction,canSend:enabled&&allowed(user,'chat.send')&&!restriction,canReport:allowed(user,'reports.create')};
  }
- private policy(value:any){return {enabled:value.enabled,slowModeSeconds:value.slowModeSeconds,canModerate:value.canModerate,canManageModerators:value.canManageModerators,canSend:value.canSend,canReport:value.canReport,restriction:value.restriction};}
- present(message:any){return {id:message.id,authorId:message.authorId,displayName:message.displayName,text:message.deleted?'':message.text,deleted:message.deleted,createdAt:message.createdAt};}
+ private policy(value:any){return {epoch:value.epoch,enabled:value.enabled,slowModeSeconds:value.slowModeSeconds,canModerate:value.canModerate,canManageModerators:value.canManageModerators,canSend:value.canSend,canReport:value.canReport,restriction:value.restriction};}
+ present(message:any){return {id:message.id,epoch:message.epoch,authorId:message.authorId,displayName:message.displayName,text:message.deleted?'':message.text,deleted:message.deleted,createdAt:message.createdAt};}
  emit(channelId:string,event:any){for(const send of this.listeners.get(channelId)||[])send(event);}
  subscribe(channelId:string,send:(event:any)=>void){const listeners=this.listeners.get(channelId)||new Set();listeners.add(send);this.listeners.set(channelId,listeners);return()=>{listeners.delete(send);if(!listeners.size)this.listeners.delete(channelId);};}
- async history(identity:any,channelId:string){const policy=await this.access(identity,channelId);const messages=await this.platform.db.chatMessage.findMany({where:{roomId:policy.roomId},orderBy:{id:'desc'},take:100});return {messages:messages.reverse().map(message=>this.present(message)),...this.policy(policy)};}
- async send(identity:any,channelId:string,input:{text:string;clientMessageId:string}){
+ async history(identity:any,channelId:string){const policy=await this.access(identity,channelId);const messages=await this.platform.db.chatMessage.findMany({where:{roomId:policy.roomId,epoch:policy.epoch},orderBy:{id:'desc'},take:100});return {messages:messages.reverse().map(message=>this.present(message)),...this.policy(policy)};}
+ async send(identity:any,channelId:string,input:{text:string;clientMessageId:string;epoch?:number}){
   const policy=await this.access(identity,channelId);this.platform.require(policy.user,'chat.send');
   const text=input.text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,'').trim();if(!text)throw new BadRequestException('Write a message first.');
   const message=await this.platform.db.$transaction(async tx=>{
+   await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${`chat-room:${policy.roomId}`}))`;
    await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${`chat-rules:${channelId}`}))`;
    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`chat:${policy.roomId}:${policy.user.id}`}))`;
    const current=await this.access(identity,channelId,tx);
+   if(input.epoch!==undefined&&input.epoch!==current.epoch)throw new ConflictException('This stream chat ended. Send your message again in the new chat.');
    if(!current.enabled)throw new ForbiddenException('Chat is disabled for this channel.');
    if(current.restriction)throw new ForbiddenException(current.restriction.kind==='ban'?'You are banned from sending messages in this channel.':`You are timed out until ${new Date(current.restriction.expiresAt).toISOString()}.`);
-   const existing=await tx.chatMessage.findUnique({where:{authorId_clientMessageId:{authorId:policy.user.id,clientMessageId:input.clientMessageId}}});if(existing){if(existing.roomId!==policy.roomId)throw new ForbiddenException();return existing;}
+   const existing=await tx.chatMessage.findUnique({where:{authorId_clientMessageId:{authorId:policy.user.id,clientMessageId:input.clientMessageId}}});if(existing){if(existing.roomId!==policy.roomId)throw new ForbiddenException();if(existing.epoch!==current.epoch)throw new ConflictException('This message belongs to an ended chat.');return existing;}
    if(hasBlockedWord(text,current.channel.chatRules?.blockedWords||[]))throw new ForbiddenException('Your message contains a word or phrase blocked by this channel.');
    const last=await tx.chatMessage.findFirst({where:{roomId:policy.roomId,authorId:policy.user.id},orderBy:{createdAt:'desc'}});
    if(last&&Date.now()-last.createdAt.getTime()<Math.max(1,current.slowModeSeconds)*1000)throw new HttpException('Wait a moment before sending another message.',429);
-   return tx.chatMessage.create({data:{roomId:policy.roomId,authorId:policy.user.id,displayName:policy.user.displayName,text,clientMessageId:input.clientMessageId}});
+   return tx.chatMessage.create({data:{roomId:policy.roomId,epoch:current.epoch,authorId:policy.user.id,displayName:policy.user.displayName,text,clientMessageId:input.clientMessageId}});
   });const presented=this.present(message);this.emit(channelId,{type:'message',message:presented});return presented;
  }
  async remove(identity:any,channelId:string,id:number){
   const policy=await this.access(identity,channelId);if(!policy.canModerate)throw new ForbiddenException();
-  await this.platform.db.$transaction(async tx=>{const changed=await tx.chatMessage.updateMany({where:{id,roomId:policy.roomId},data:{deleted:true,text:''}});if(!changed.count)throw new NotFoundException();await this.platform.audit(tx,policy.user.id,'chat.message_deleted',String(id),{channelId});});
+  await this.platform.db.$transaction(async tx=>{await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${`chat-room:${policy.roomId}`}))`;const room=await tx.chatRoom.findUniqueOrThrow({where:{id:policy.roomId}});const changed=await tx.chatMessage.updateMany({where:{id,roomId:policy.roomId,epoch:room.epoch},data:{deleted:true,text:''}});if(!changed.count)throw new NotFoundException();await this.platform.audit(tx,policy.user.id,'chat.message_deleted',String(id),{channelId});});
   this.emit(channelId,{type:'deleted',id});return {deleted:true};
  }
  async moderation(identity:any,channelId:string){

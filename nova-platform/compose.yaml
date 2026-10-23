@@ -179,6 +179,27 @@ services:
     secrets: [restream_service_secret]
     depends_on:
       api: {condition: service_healthy}
+  archive-initialize:
+    image: nova-application:0.1.0
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    command: [node,scripts/initialize-chat-archive.mjs]
+    secrets: [postgres_password,chat_archive_db_password]
+    depends_on:
+      postgres: {condition: service_healthy}
+  chat-archive-worker:
+    image: nova-application:0.1.0
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 256m
+    command: [node,--import,./scripts/load-secrets.mjs,scripts/chat-archive-worker.mjs]
+    secrets: [app_db_password,chat_archive_db_password]
+    depends_on:
+      archive-initialize: {condition: service_completed_successfully}
+      api: {condition: service_healthy}
 volumes:
   postgres_data:
   caddy_data:
@@ -196,4 +217,5 @@ secrets:
   media_secret: {file: ./.secrets/media_secret}
   identity_service_secret: {file: ./.secrets/identity_service_secret}
   restream_service_secret: {file: ./.secrets/restream_service_secret}
+  chat_archive_db_password: {file: ./.secrets/chat_archive_db_password}
 

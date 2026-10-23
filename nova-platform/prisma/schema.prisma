@@ -64,6 +64,7 @@ model Channel {
   title String
   state String @default("offline")
   accessState String @default("ready")
+  publishingPaused Boolean @default(false)
   settings Json @default("{}")
   version Int @default(1)
   createdAt DateTime @default(now())
@@ -224,6 +225,7 @@ model RevokedSession {
 model ChatMessage {
   id Int @id @default(autoincrement())
   roomId String @db.Uuid
+  epoch Int @default(0)
   authorId String? @db.Uuid
   clientMessageId String @db.Uuid
   displayName String
@@ -235,6 +237,7 @@ model ChatMessage {
   reports ChatReport[]
   @@unique([authorId,clientMessageId])
   @@index([roomId,id])
+  @@index([roomId,epoch,id])
   @@index([roomId,authorId,createdAt])
 }
 model Category {
@@ -287,7 +290,7 @@ model ChatReport {
   id String @id @default(uuid()) @db.Uuid
   channelId String @db.Uuid
   reporterId String @db.Uuid
-  messageId Int
+  messageId Int?
   reason String
   details String @default("")
   snapshot Json
@@ -298,7 +301,7 @@ model ChatReport {
   reviewedAt DateTime?
   channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
   reporter User @relation(fields:[reporterId],references:[id],onDelete:Cascade)
-  message ChatMessage @relation(fields:[messageId],references:[id],onDelete:Cascade)
+  message ChatMessage? @relation(fields:[messageId],references:[id],onDelete:SetNull)
   @@unique([reporterId,messageId])
   @@index([channelId,status,createdAt])
   @@index([reporterId,createdAt])
@@ -306,8 +309,20 @@ model ChatReport {
 model ChatRoom {
   id String @id @default(uuid()) @db.Uuid
   channelId String @unique @db.Uuid
+  epoch Int @default(0)
   channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade)
   messages ChatMessage[]
+}
+model ChatArchiveBatch {
+  id String @id @db.Uuid
+  roomId String @db.Uuid
+  channelId String @db.Uuid
+  slug String
+  title String
+  epoch Int
+  endedAt DateTime
+  completedAt DateTime?
+  @@index([completedAt,endedAt])
 }
 model Setting {
   key String @id

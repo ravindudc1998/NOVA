@@ -15,11 +15,13 @@ import {identitySession} from './account-security.js';
 import {forwardedMediaPath,readPlaybackPolicy} from './playback-access.js';
 import {mayPublish} from './policy.js';
 import {encryptSecret,hashSecret,safeEqual} from './secrets.js';
+import {ChatService} from './chat.service.js';
+import {closeStreamChat} from './chat-lifecycle.js';
 const uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const ingestPattern=new RegExp(`^ingest/(${uuid})$`),outputPattern=new RegExp(`^live/(${uuid})/(${uuid})$`);
 @Injectable()
 export class MediaService implements OnModuleInit,OnModuleDestroy {
-  constructor(readonly platform:PlatformService,readonly audience:AudienceService=new AudienceService(platform)){if((process.env.MEDIA_SERVICE_SECRET||'').length<32)throw new Error('A strong MEDIA_SERVICE_SECRET is required.');}
+  constructor(readonly platform:PlatformService,readonly audience:AudienceService=new AudienceService(platform),readonly chat:ChatService=new ChatService(platform)){if((process.env.MEDIA_SERVICE_SECRET||'').length<32)throw new Error('A strong MEDIA_SERVICE_SECRET is required.');}
   private timer?:NodeJS.Timeout;private syncing=false;private failedSince=0;
   get db(){return this.platform.db;}
   private get signingKey(){return new TextEncoder().encode(process.env.MEDIA_SERVICE_SECRET);}
@@ -66,22 +68,32 @@ export class MediaService implements OnModuleInit,OnModuleDestroy {
       await this.platform.audit(tx,channel.ownerId,'stream.start_requested',session.id,{channelId:channel.id,protocol});return {};
     });
   }
-  async stop(user:any,channelId:string,administrator=false){
+  private notifyReset(reset:any){if(reset)this.chat.emit(reset.channelId,{type:'reset',epoch:reset.epoch});}
+  private async endSession(tx:any,session:any,reason:string,status='ended'){
+    const ended=await tx.streamSession.update({where:{id:session.id},data:{endedAt:new Date(),status,endReason:reason}});
+    return closeStreamChat(tx,ended);
+  }
+  async resume(user:any,channelId:string,administrator=false){
+    if(!administrator&&user.channel?.id!==channelId)throw new ForbiddenException();this.platform.require(user,administrator?'streams.stop_any':'streams.stop_own');
+    await this.db.$transaction(async tx=>{await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`media:${channelId}`}))`;const channel=await tx.channel.findUnique({where:{id:channelId},include:{owner:{include:USER_INCLUDE}}});if(!channel)throw new NotFoundException();if(!mayPublish(channel.owner,{...channel,publishingPaused:false},await this.platform.settings(tx)))throw new ForbiddenException('Publishing is unavailable under current account or platform policy.');await tx.channel.update({where:{id:channelId},data:{publishingPaused:false}});await this.platform.audit(tx,user.id,'stream.publishing_resumed',channelId,{credentialRotated:false});});return {publishingPaused:false,credentialRotated:false};
+  }
+  async stop(user:any,channelId:string,administrator=false,rotateCredential=false){
     if(!administrator&&(!user.channel||user.channel.id!==channelId))throw new ForbiddenException();
     this.platform.require(user,administrator?'streams.stop_any':'streams.stop_own');
-    const sessions=await this.db.$transaction(async tx=>{
+    const {sessions,resets}=await this.db.$transaction(async tx=>{
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`media:${channelId}`}))`;
       const channel=await tx.channel.findUnique({where:{id:channelId}});if(!channel)throw new NotFoundException();
-      const active=await tx.streamSession.findMany({where:{channelId,endedAt:null}});const secret=randomBytes(32).toString('base64url');
-      await tx.streamCredential.update({where:{channelId},data:{generation:{increment:1},lookupHash:hashSecret(secret),encryptedSecret:encryptSecret(secret)}});
-      await tx.streamSession.updateMany({where:{channelId,endedAt:null},data:{endedAt:new Date(),status:'ended',endReason:'stopped'}});
-      await tx.channel.update({where:{id:channelId},data:{state:'offline'}});await this.platform.audit(tx,user.id,'stream.stopped',channelId,{sessions:active.map(s=>s.id),credentialRotated:true});return active;
+      const active=await tx.streamSession.findMany({where:{channelId,endedAt:null}}),resets=[];
+      if(rotateCredential){const secret=randomBytes(32).toString('base64url');await tx.streamCredential.update({where:{channelId},data:{generation:{increment:1},lookupHash:hashSecret(secret),encryptedSecret:encryptSecret(secret)}});}
+      for(const session of active)resets.push(await this.endSession(tx,session,'stopped'));
+      await tx.channel.update({where:{id:channelId},data:{state:'offline',publishingPaused:rotateCredential?channel.publishingPaused:true}});await this.platform.audit(tx,user.id,rotateCredential?'stream.key_rotated':'stream.stopped',channelId,{sessions:active.map(s=>s.id),credentialRotated:rotateCredential});return {sessions:active,resets};
     });
+    resets.forEach(reset=>this.notifyReset(reset));
     // Durable revocation precedes disconnection. Reconciliation retries kicks after any outage.
     await Promise.allSettled(sessions.map(s=>this.kick({type:s.protocol==='rtmp'?'rtmpConn':'webRTCSession',id:s.publisherId})));
-    await this.reconcile();return {state:'offline',credentialRotated:true};
+    await this.reconcile();return {state:'offline',credentialRotated:rotateCredential,publishingPaused:!rotateCredential||user.channel?.publishingPaused===true};
   }
-  async rotate(user:any,identity:any){await this.platform.revealKey(user,identity);await this.stop({...user,memberships:user.memberships},user.channel.id);return {rotated:true};}
+  async rotate(user:any,identity:any){await this.platform.revealKey(user,identity);await this.stop(user,user.channel.id,false,true);return {rotated:true};}
   async browserOffer(user:any,offer:string){
     if(!user.channel)throw new ForbiddenException();const settings=await this.platform.settings();if(!mayPublish(user,user.channel,settings)||!settings.browserPublishingEnabled)throw new ForbiddenException('Browser publishing is disabled.');
     if(await this.db.streamSession.count({where:{channelId:user.channel.id,endedAt:null}}))throw new ConflictException('Stop the current broadcast first.');
@@ -165,19 +177,20 @@ export class MediaService implements OnModuleInit,OnModuleDestroy {
   async reconcile(){
     if(this.syncing)return;this.syncing=true;
     try{
-      let paths:any[];try{paths=await this.paths();this.failedSince=0;}catch{this.failedSince||=Date.now();if(Date.now()-this.failedSince>15000){await this.db.channel.updateMany({where:{state:{in:['starting','live']}},data:{state:'offline'}});await this.db.streamSession.updateMany({where:{endedAt:null},data:{status:'error',endedAt:new Date(),endReason:'media_unavailable'}});}return;}
+      let paths:any[];try{paths=await this.paths();this.failedSince=0;}catch{this.failedSince||=Date.now();if(Date.now()-this.failedSince>15000){const sessions=await this.db.streamSession.findMany({where:{endedAt:null}});for(const session of sessions){const reset=await this.db.$transaction(async tx=>{await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`media:${session.channelId}`}))`;const current=await tx.streamSession.findFirst({where:{id:session.id,endedAt:null}});if(!current)return null;const reset=await this.endSession(tx,current,'media_unavailable','error');await tx.channel.update({where:{id:session.channelId},data:{state:'offline'}});return reset;});this.notifyReset(reset);}}return;}
       const settings=await this.platform.settings();const sessions=await this.db.streamSession.findMany({where:{endedAt:null},include:{channel:{include:{owner:{include:USER_INCLUDE}}}}});
       for(const session of sessions){
         const raw=paths.find(p=>p.name===`ingest/${session.channelId}`&&p.ready&&p.source?.id===session.publisherId);
         const out=paths.some(p=>p.name===`live/${session.channelId}/${session.id}`&&p.ready)||await hlsReady(session.id);
         const eligible=mayPublish(session.channel.owner,session.channel,settings)&&(session.protocol!=='webrtc'||settings.browserPublishingEnabled);
         let endReason:string|undefined;if(!eligible)endReason='access_revoked';else if(!raw&&session.lastSeenAt&&Date.now()-session.lastSeenAt.getTime()>4000)endReason='publisher_disconnected';else if(!raw&&!session.lastSeenAt&&Date.now()-session.createdAt.getTime()>30000)endReason='publisher_timeout';else if(!out&&Date.now()-(session.lastOutputAt||session.createdAt).getTime()>45000)endReason='transcode_timeout';
-        await this.db.$transaction(async tx=>{
+        const reset=await this.db.$transaction(async tx=>{
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`media:${session.channelId}`}))`;
           const current=await tx.streamSession.findFirst({where:{id:session.id,endedAt:null}});if(!current)return;
-          if(endReason){await tx.streamSession.update({where:{id:session.id},data:{status:endReason.includes('timeout')?'error':'ended',endedAt:new Date(),endReason}});await tx.channel.update({where:{id:session.channelId},data:{state:'offline'}});await this.platform.audit(tx,null,'stream.ended',session.id,{reason:endReason});}
+          if(endReason){const reset=await this.endSession(tx,current,endReason,endReason.includes('timeout')?'error':'ended');await tx.channel.update({where:{id:session.channelId},data:{state:'offline'}});await this.platform.audit(tx,null,'stream.ended',session.id,{reason:endReason});return reset;}
           else{const state=raw&&out?'live':'starting';await tx.streamSession.update({where:{id:session.id},data:{status:state,...(raw?{lastSeenAt:new Date()}:{}),...(out?{lastOutputAt:new Date()}:{}),...(state==='live'&&!current.startedAt?{startedAt:new Date(),title:session.channel.title,analyticsStartedAt:new Date(),lastAnalyticsAt:new Date()}: {})}});await tx.channel.update({where:{id:session.channelId},data:{state}});if(state==='live'&&!current.startedAt)await tx.liveNotificationEvent.upsert({where:{sessionId:session.id},create:{sessionId:session.id,channelId:session.channelId,...(!settings.liveNotificationsEnabled?{processedAt:new Date()}:{})},update:{}});}
         });
+        this.notifyReset(reset);
       }
       // This also cleans orphaned publishers after an API restart, stop or revoked access.
       const active=await this.db.streamSession.findMany({where:{endedAt:null}});
@@ -196,5 +209,5 @@ export class MediaService implements OnModuleInit,OnModuleDestroy {
     return {channelState:user.channel.state,session:sessionInfo,audience,...await readStreamHealth(session.id,user.channel.id)};
   }
   async jobs(){const paths=await this.paths();const sessions=await this.db.streamSession.findMany({where:{endedAt:null}});return sessions.flatMap(s=>{const path=paths.find(p=>p.name===`ingest/${s.channelId}`&&p.ready&&p.source?.id===s.publisherId);return path?[{id:s.id,channelId:s.channelId,receivedBytes:Number.isSafeInteger(path.bytesReceived)?path.bytesReceived:0}]:[];});}
-  async sessions(user:any){this.platform.require(user,'streams.stop_any');return this.db.streamSession.findMany({include:{channel:{select:{slug:true,title:true}}},orderBy:{createdAt:'desc'},take:100});}
+  async sessions(user:any){this.platform.require(user,'streams.stop_any');return this.db.streamSession.findMany({include:{channel:{select:{slug:true,title:true,publishingPaused:true}}},orderBy:{createdAt:'desc'},take:100});}
 }

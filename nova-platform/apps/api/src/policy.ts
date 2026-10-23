@@ -34,5 +34,5 @@ export function effectivePermissions(user:any):string[]{
 }
 export function allowed(user:any,permission:string){const p=effectivePermissions(user);return p.includes('platform.admin')||p.includes(permission);}
 export function mayPublish(user:any,channel:any,settings:any){
-  return Boolean(user.status==='active'&&channel?.ownerId===user.id&&channel?.accessState==='ready'&&settings.publishingEnabled&&!settings.maintenanceEnabled&&allowed(user,'streams.publish_own'));
+  return Boolean(user.status==='active'&&channel?.ownerId===user.id&&channel?.accessState==='ready'&&!channel.publishingPaused&&settings.publishingEnabled&&!settings.maintenanceEnabled&&allowed(user,'streams.publish_own'));
 }

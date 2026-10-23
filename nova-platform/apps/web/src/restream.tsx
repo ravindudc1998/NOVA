@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {ModalDialog} from './dialog';
+import {RESTREAM_SERVER_DEFAULTS} from './restream-presets';
 import './restream.css';
 const providers:Record<string,{name:string;help:string;url:string}>={
  twitch:{name:'Twitch',help:'Copy the ingest server URL and stream key from your Twitch dashboard. Follow your account’s simulcasting terms.',url:'https://dev.twitch.tv/docs/video-broadcast/'},
@@ -13,12 +14,12 @@ const errors:Record<string,string>={connection_failed:'The destination could not
 
 export function RestreamDialog({api,onClose,channelId}:any){
  const base=channelId?`/admin/channels/${channelId}/restreams`:'/me/channel/restreams';
- const [data,setData]=useState<any>(null),[editing,setEditing]=useState<any>(null),[provider,setProvider]=useState('twitch'),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ const [data,setData]=useState<any>(null),[editing,setEditing]=useState<any>(null),[provider,setProvider]=useState('twitch'),[serverUrl,setServerUrl]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const mounted=useRef(false),revision=useRef(0),busyRef=useRef(false);
  const load=async()=>{const current=++revision.current,result=await api(base);if(mounted.current&&current===revision.current)setData(result);};
  useEffect(()=>{mounted.current=true;void load().catch((e:any)=>{if(mounted.current)setError(e.message);});const timer=setInterval(()=>{if(!busyRef.current)void load().catch(()=>{});},4000);return()=>{mounted.current=false;revision.current++;clearInterval(timer);};},[api,base]);
  const mutate=async(action:()=>Promise<any>)=>{if(busyRef.current)return;busyRef.current=true;setBusy(true);setError('');revision.current++;try{const result=await action();if(mounted.current){setData(result);setEditing(null);}}catch(e:any){if(mounted.current)setError(e.message);}finally{busyRef.current=false;if(mounted.current)setBusy(false);}};
- const edit=(row?:any)=>{const value=row||{provider:'twitch',name:'',serverUrl:'',enabled:false,maxHeight:720};setProvider(value.provider);setEditing(value);setError('');};
+ const edit=(row?:any)=>{const value=row||{provider:'twitch',name:'',serverUrl:RESTREAM_SERVER_DEFAULTS.twitch,enabled:false,maxHeight:720};setProvider(value.provider);setServerUrl(value.serverUrl);setEditing(value);setError('');};
  return <ModalDialog wide title="Multistream" description={data?`Send @${data.channel.slug} to your other platforms.`:'Connect your live stream to other platforms.'} error={error} onClose={onClose}>
   {!data?<p className="tools-help">Loading destinations…</p>:<>
    <div className="restream-intro"><p>OBS sends one stream to NOVA. Enabled destinations receive your live output automatically. <strong>Sending</strong> confirms relay traffic; use each platform’s dashboard to check its preview and publish it to your audience.</p><span>{data.destinations.length}/{data.policy.maxDestinations} destinations</span></div>
@@ -31,11 +32,11 @@ export function RestreamDialog({api,onClose,channelId}:any){
     <div className="restream-card-actions"><button className={row.enabled?'secondary':'primary'} disabled={busy} onClick={()=>void mutate(()=>api(`${base}/${row.id}`,'PATCH',{version:row.version,enabled:!row.enabled}))}>{row.enabled?'Pause relay':'Enable relay'}</button><button className="secondary" disabled={busy} onClick={()=>edit(row)}>Edit</button><button className="subtle" disabled={busy} onClick={()=>void mutate(()=>api(`${base}/${row.id}?version=${row.version}`,'DELETE'))}>Remove</button></div>
    </section>)}</div>
    {editing&&<form className="restream-editor" key={editing.id||'new'} onSubmit={event=>{event.preventDefault();const form=new FormData(event.currentTarget),key=String(form.get('streamKey')||'');void mutate(()=>api(`${base}${editing.id?'/'+editing.id:''}`,editing.id?'PATCH':'POST',{provider:form.get('provider'),name:form.get('name'),serverUrl:form.get('serverUrl'),enabled:form.get('enabled')==='on',maxHeight:Number(form.get('maxHeight')),...(key?{streamKey:key}:{}),...(editing.id?{version:editing.version}:{})}));}}>
-    <h3>{editing.id?'Edit destination':'Add destination'}</h3><div className="form-row"><label>Platform<select name="provider" value={provider} onChange={event=>setProvider(event.target.value)}>{Object.entries(providers).map(([key,value])=><option key={key} value={key}>{value.name}</option>)}</select></label><label>Name<input name="name" defaultValue={editing.name} maxLength={60} required placeholder="My YouTube channel" autoFocus/></label></div>
+    <h3>{editing.id?'Edit destination':'Add destination'}</h3><div className="form-row"><label>Platform<select name="provider" value={provider} onChange={event=>{setProvider(event.target.value);setServerUrl(RESTREAM_SERVER_DEFAULTS[event.target.value]||'');}}>{Object.entries(providers).map(([key,value])=><option key={key} value={key}>{value.name}</option>)}</select></label><label>Name<input name="name" defaultValue={editing.name} maxLength={60} required placeholder="My YouTube channel" autoFocus/></label></div>
     <p className="tools-help">{providers[provider].help}{providers[provider].url&&<> <a href={providers[provider].url} target="_blank" rel="noopener noreferrer">Open platform guide ↗</a></>}</p>
-    <label>Server URL<input name="serverUrl" defaultValue={editing.serverUrl} type="text" inputMode="url" maxLength={500} required placeholder="rtmps://your-platform-server/app" autoComplete="off"/></label>
-    <label>{editing.id?'Replace stream key (leave blank to keep it)':'Stream key'}<input name="streamKey" type="password" required={!editing.id} maxLength={2048} autoComplete="new-password" placeholder={editing.id?'Saved key stays private':'Paste the platform stream key'}/></label>
-    <p className="tools-help">Changing the server URL requires a new key. Keys are encrypted and cannot be revealed after saving.</p>
+    <label>Server URL<input name="serverUrl" value={serverUrl} onChange={event=>setServerUrl(event.target.value)} type="text" inputMode="url" maxLength={500} required placeholder="rtmps://your-platform-server/app" autoComplete="off"/></label>
+    <label>{editing.id?'Replace stream key (leave blank to keep it)':'Stream key'}<input key={provider} name="streamKey" type="password" required={!editing.id||provider!==editing.provider} maxLength={2048} autoComplete="new-password" placeholder={editing.id?'Saved key stays private':'Paste the platform stream key'}/></label>
+    <p className="tools-help">Platform defaults fill the server URL automatically and can be edited. LinkedIn requires the URL generated for your event/region. Changing the server URL requires a new key. Keys are encrypted and cannot be revealed after saving.</p>
     <label>Maximum output quality<select name="maxHeight" defaultValue={editing.maxHeight}><option value={720}>720p · 30 fps</option><option value={1080}>1080p · 30 fps</option></select></label>
     <label className="check"><input name="enabled" type="checkbox" defaultChecked={editing.enabled}/> Relay automatically whenever this channel is live</label>
     <div className="studio-dialog-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>setEditing(null)}>Cancel</button><button className="primary" disabled={busy}>{busy?'Saving…':'Save destination'}</button></div>

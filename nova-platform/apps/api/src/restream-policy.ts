@@ -13,7 +13,7 @@ export function destinationUrl(value:string){
  let url:URL;try{url=new URL(value);}catch{throw new Error('Use a valid RTMP or RTMPS server URL.');}
  if(!['rtmp:','rtmps:'].includes(url.protocol)||url.username||url.password||url.search||url.hash||!url.pathname||url.pathname==='/')throw new Error('Enter the server URL separately from the stream key, using RTMP or RTMPS.');
  const host=url.hostname.toLowerCase(),port=Number(url.port||(url.protocol==='rtmps:'?443:1935));
- if(![443,1935].includes(port))throw new Error('This destination must use port 443 or 1935.');
+ if(![443,1935].includes(port)&&!(url.protocol==='rtmps:'&&[2935,2936].includes(port)))throw new Error('Use port 443 or 1935, or RTMPS port 2935/2936.');
  if(isIP(host)){if(!publicIPv4(host))throw new Error('Use a public streaming server address.');}
  else if(host.length>253||!host.includes('.')||!host.split('.').every(part=>/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(part))||/\.(local|localhost|internal|test|invalid)$/.test(host)||host==='localhost')throw new Error('Use a public streaming server address.');
  url.pathname=url.pathname.replace(/\/+$/,'');return url.toString().replace(/\/$/,'');
